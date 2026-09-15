@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETNS 할일관리</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>✅ ETNS 할일관리</h1>
+      <p class="subtitle">오늘 해야 할 일을 정리해보세요</p>
+    </header>
+
+    <div class="progress-card">
+      <div class="progress-text">
+        <span>{{ done_count }} / {{ total }} 완료</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: {{ (done_count / total * 100) if total else 0 }}%;"></div>
+      </div>
+    </div>
+
+    <form class="add-form" action="{{ url_for('add') }}" method="post">
+      <input type="text" name="task" placeholder="할 일을 입력하세요..." autocomplete="off" required>
+      <button type="submit">추가</button>
+    </form>
+
+    <ul class="todo-list">
+      {% for todo in todos %}
+      <li class="todo-item {{ 'done' if todo['done'] else '' }}">
+        <form action="{{ url_for('toggle', todo_id=todo['id']) }}" method="post" class="toggle-form">
+          <button type="submit" class="check-btn" aria-label="완료 토글">
+            {{ '✔' if todo['done'] else '' }}
+          </button>
+        </form>
+        <div class="todo-content">
+          <span class="task-text">{{ todo['task'] }}</span>
+          <span class="task-date">{{ todo['created_at'] }}</span>
+        </div>
+        <form action="{{ url_for('delete', todo_id=todo['id']) }}" method="post">
+          <button type="submit" class="delete-btn" aria-label="삭제">✕</button>
+        </form>
+      </li>
+      {% else %}
+      <li class="empty">등록된 할 일이 없습니다. 위에서 새 할 일을 추가해보세요!</li>
+      {% endfor %}
+    </ul>
+  </div>
+</body>
+</html>
