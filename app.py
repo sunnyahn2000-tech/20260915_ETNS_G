@@ -1,22 +1,21 @@
 import os
-import sqlite3
 from datetime import datetime
-from pathlib import Path
 
+import psycopg2
+import psycopg2.extras
+from dotenv import load_dotenv
 from flask import Flask, g, redirect, render_template, request, url_for
 
-BASE_DIR = Path(__file__).resolve().parent
-# Vercel's serverless filesystem is read-only except /tmp, and /tmp is not
-# shared or persistent across invocations - data written there can disappear.
-DB_PATH = Path("/tmp/todo.db") if os.environ.get("VERCEL") else BASE_DIR / "todo.db"
+load_dotenv()
+
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 app = Flask(__name__)
 
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
+        g.db = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
     return g.db
 
 
@@ -28,25 +27,30 @@ def close_db(exception=None):
 
 
 def init_db():
-    with sqlite3.connect(DB_PATH) as db:
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS todos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task TEXT NOT NULL,
-                done INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL
+    conn = psycopg2.connect(DATABASE_URL)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS todos (
+                    id SERIAL PRIMARY KEY,
+                    task TEXT NOT NULL,
+                    done BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TEXT NOT NULL
+                )
+                """
             )
-            """
-        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 @app.route("/")
 def index():
     db = get_db()
-    todos = db.execute(
-        "SELECT * FROM todos ORDER BY done ASC, id DESC"
-    ).fetchall()
+    with db.cursor() as cur:
+        cur.execute("SELECT * FROM todos ORDER BY done ASC, id DESC")
+        todos = cur.fetchall()
     total = len(todos)
     done_count = sum(1 for t in todos if t["done"])
     return render_template(
@@ -59,10 +63,11 @@ def add():
     task = request.form.get("task", "").strip()
     if task:
         db = get_db()
-        db.execute(
-            "INSERT INTO todos (task, done, created_at) VALUES (?, 0, ?)",
-            (task, datetime.now().strftime("%Y-%m-%d %H:%M")),
-        )
+        with db.cursor() as cur:
+            cur.execute(
+                "INSERT INTO todos (task, done, created_at) VALUES (%s, FALSE, %s)",
+                (task, datetime.now().strftime("%Y-%m-%d %H:%M")),
+            )
         db.commit()
     return redirect(url_for("index"))
 
@@ -70,9 +75,10 @@ def add():
 @app.route("/toggle/<int:todo_id>", methods=["POST"])
 def toggle(todo_id):
     db = get_db()
-    db.execute(
-        "UPDATE todos SET done = 1 - done WHERE id = ?", (todo_id,)
-    )
+    with db.cursor() as cur:
+        cur.execute(
+            "UPDATE todos SET done = NOT done WHERE id = %s", (todo_id,)
+        )
     db.commit()
     return redirect(url_for("index"))
 
@@ -80,7 +86,8 @@ def toggle(todo_id):
 @app.route("/delete/<int:todo_id>", methods=["POST"])
 def delete(todo_id):
     db = get_db()
-    db.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
+    with db.cursor() as cur:
+        cur.execute("DELETE FROM todos WHERE id = %s", (todo_id,))
     db.commit()
     return redirect(url_for("index"))
 
