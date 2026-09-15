@@ -8,6 +8,13 @@
 </head>
 <body>
   <div class="wrap">
+    <div class="topbar">
+      <span class="topbar-user">👤 {{ username }}</span>
+      <form action="{{ url_for('logout') }}" method="post">
+        <button type="submit" class="logout-btn">로그아웃</button>
+      </form>
+    </div>
+
     <header>
       <h1>✅ ETNS 할일관리</h1>
       <p class="subtitle">오늘 해야 할 일을 정리해보세요</p>
